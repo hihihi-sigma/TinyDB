@@ -5,6 +5,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include<stdint.h>
+#include<stdbool.h>
 
 typedef struct{
     char *Buffer; // tro toi vung nho chuoi tren heap
@@ -79,9 +80,19 @@ ssize_t my_getline(char **str, size_t *len, FILE *stream){
     return (ssize_t)pos;
 }
 
+bool str_ieq(const char *a, const char *b, size_t len, bool exact_match){
+    if(a == NULL || b == NULL) return false;
+    for(size_t i = 0;i<len;i++){
+        if(a[i] == '\0' || b[i] == '\0') return false;
+        if(tolower((unsigned char)a[i]) != tolower((unsigned char)b[i])) return false;
+    }
+    if(exact_match) return a[len] == '\0' && b[len] == '\0';
+    return true;
+}
+
 static MetaCommandResult do_meta_command(InputBuffer *input){
     if(input == NULL || input->Buffer == NULL) return MetaCommandResult_UNRECOGNIZED_COMMAND;
-    if(strcmp(input->Buffer, ".exit") == 0){
+    if(str_ieq(input->Buffer, ".exit", 5, 1)){
         close_input_buffer(input);
         exit(EXIT_SUCCESS);
     }
@@ -90,11 +101,11 @@ static MetaCommandResult do_meta_command(InputBuffer *input){
 
 static PrepareResult prepare_statement(InputBuffer *input, Statement *statement){
     if(input == NULL || input->Buffer == NULL) return PrepareResult_UNRECOGNIZED_STATEMENT;
-    if(strcmp(input->Buffer, "SELECT") == 0){
+    if(str_ieq(input->Buffer, "SELECT", 6, 1)){
         statement->type = STATEMENT_SELECT;
         return PrepareResult_SUCCESS;
     }
-    else if(strncmp(input->Buffer, "INSERT ", 7) == 0){
+    else if(str_ieq(input->Buffer, "INSERT ", 7, 0)){
         statement->type = STATEMENT_INSERT;
         int n = sscanf(input->Buffer + 7, "%u %63s %127s", &statement->row_to_insert.id,
                                                      statement->row_to_insert.username,
@@ -128,14 +139,37 @@ int main(void){
     InputBuffer *input = new_input_buffer();
     if(input == NULL) return 1;
     Table tiny_db;
+    memset(&tiny_db, 0, sizeof(tiny_db));
+    // how it works: getline() -> trim_trailing_newline -> check if blank or spaces
+    // -> check do_meta_command
+    // -> analysis the statement -> Execute
     while(1){
-        Statement now;
         print();
         ssize_t len = my_getline(&input->Buffer, &input->Buffer_length, stdin);
         if(len < 0) break;
         input->input_length = len;
         trim_trailing_newline(input->Buffer, &input->input_length);
         if(is_blank_or_spaces(input->Buffer)) continue;
+        if(str_ieq(input->Buffer, ".", 1, 0)){
+            if(do_meta_command(input) == MetaCommandResult_SUCCESS) break;
+            else{
+                printf("Unrecognized command %s \n", input->Buffer);
+                continue;
+            }
+        }
+        Statement now = {0};
+        PrepareResult prep = prepare_statement(input, &now);
+        if(prep != PrepareResult_SUCCESS){
+            if(prep == PrepareResult_SYNTAX_ERROR) printf("Syntax Error\n");
+            else if(prep == PrepareResult_UNRECOGNIZED_STATEMENT) printf("Unrecognized Statement\n");
+            continue;
+        }
+        ExecuteResult exe = execute_statement(now, &tiny_db);
+        if(exe == EXECUTE_TABLE_FULL){
+            printf("Table Full\n");
+            continue;
+        }
+        printf("Executed Successfully\n");
     }
     close_input_buffer(input);
     return 0;
