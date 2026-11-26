@@ -113,6 +113,13 @@ static PrepareResult prepare_statement(InputBuffer *input, Statement *statement)
         if(n != 3) return PrepareResult_SYNTAX_ERROR;   
         return PrepareResult_SUCCESS;
     }
+    else if(str_ieq(input->Buffer, "DEL ", 4, 0)){
+        statement->type = STATEMENT_DELETE;
+        if(input->Buffer[4] == '-') return PrepareResult_SYNTAX_ERROR;
+        int n = sscanf(input->Buffer + 4, "%u", &statement->row_to_insert.id);
+        if(n != 1) return PrepareResult_SYNTAX_ERROR;
+        return PrepareResult_SUCCESS;
+    }
     return PrepareResult_UNRECOGNIZED_STATEMENT;
 }
 
@@ -131,6 +138,16 @@ static ExecuteResult execute_statement(Statement input, Table *tiny_db){
         for(size_t i = 0;i<tiny_db->num_rows;i++){
             printf("%u %s %s\n", tiny_db->rows[i].id, tiny_db->rows[i].username, tiny_db->rows[i].email);
         }
+    }
+    else if(input.type == STATEMENT_DELETE){
+        bool found = false;
+        for(size_t i = 0;i<tiny_db->num_rows;i++){
+            if(tiny_db->rows[i].id == input.row_to_insert.id) found = true;
+            if(found && i != tiny_db->num_rows - 1) tiny_db->rows[i] = tiny_db->rows[i+1];
+        }
+        if(found == false) return EXECUTE_NOT_FOUND;
+        (tiny_db->num_rows)--;
+        memset(&tiny_db->rows[tiny_db->num_rows], 0, sizeof(Row));
     }
     return EXECUTE_SUCCESS;
 }
@@ -167,6 +184,10 @@ int main(void){
         ExecuteResult exe = execute_statement(now, &tiny_db);
         if(exe == EXECUTE_TABLE_FULL){
             printf("Table Full\n");
+            continue;
+        }
+        else if(exe == EXECUTE_NOT_FOUND){
+            printf("Index Not Found\n");
             continue;
         }
         printf("Executed Successfully\n");

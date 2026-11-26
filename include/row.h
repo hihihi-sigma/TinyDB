@@ -19,12 +19,14 @@ typedef enum{
 
 typedef enum{
     STATEMENT_INSERT,
-    STATEMENT_SELECT
+    STATEMENT_SELECT,
+    STATEMENT_DELETE
 }StatementType; // check which type of statement is
 
 typedef enum{
     EXECUTE_SUCCESS,
-    EXECUTE_TABLE_FULL
+    EXECUTE_TABLE_FULL,
+    EXECUTE_NOT_FOUND // if cannot find the index to delete
 }ExecuteResult; // check that if the statement is executed success or not
 
 typedef struct{
@@ -35,7 +37,7 @@ typedef struct{
 
 typedef struct{
     StatementType type;
-    Row row_to_insert;
+    Row row_to_insert; // if type = DEL => id = delete this id
 }Statement; // which statemnt and insert
 
 typedef struct{
